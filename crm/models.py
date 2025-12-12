@@ -3,7 +3,7 @@ from django.core.validators import MinValueValidator
 from phonenumber_field.modelfields import PhoneNumberField
 
 class Customer(models.Model):
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
     phone = PhoneNumberField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
