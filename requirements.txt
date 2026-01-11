@@ -1,0 +1,12 @@
+Django
+graphene-django
+django-filter
+django-phonenumber-field
+phonenumbers
+psycopg2-binary
+django-crontab
+gql[requests]
+python-dateutil
+celery
+django-celery-beat
+redis
