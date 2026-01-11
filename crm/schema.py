@@ -1,6 +1,6 @@
 import graphene
 from graphene_django import DjangoObjectType
-from crm.models import Customer, Product, Order
+from crm.models import Product, Customer, Order
 from django.core.exceptions import ValidationError
 from graphql import GraphQLError
 from django.db import transaction
