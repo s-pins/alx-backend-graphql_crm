@@ -1,106 +1,80 @@
-# CRM Application - Celery and Cron Job Setup
+# CRM Celery Setup and Usage
 
-This document provides instructions on how to set up and run the background tasks for the CRM application, which include Celery-based reporting and `django-crontab` jobs.
+This document outlines the steps to set up and run Celery with Redis for the CRM application, including how to start the Celery worker and Celery Beat for scheduled tasks, and how to verify the generated reports.
 
-## 1. Prerequisites
+## Prerequisites
 
-### Install Redis
-Celery requires a message broker to handle communication between the web application and the workers. We use Redis for this.
+-   **Redis:** Celery uses Redis as a message broker. Ensure Redis is installed and running on your system.
+    -   **Installation (Ubuntu/Debian):**
+        ```bash
+        sudo apt update
+        sudo apt install redis-server
+        sudo systemctl enable redis-server
+        sudo systemctl start redis-server
+        ```
+    -   **Installation (macOS via Homebrew):**
+        ```bash
+        brew install redis
+        brew services start redis
+        ```
+    -   **Verification:**
+        ```bash
+        redis-cli ping
+        # Expected output: PONG
+        ```
 
-**On Debian/Ubuntu:**
-```sh
-sudo apt-get update
-sudo apt-get install redis-server
-```
+## Setup Steps
 
-**On macOS (using Homebrew):**
-```sh
-brew install redis
-brew services start redis
-```
+1.  **Install Python Dependencies:**
+    Ensure all required Python packages, including `celery`, `django-celery-beat`, and `redis`, are installed.
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-Verify that Redis is running:
-```sh
-redis-cli ping
-# Expected output: PONG
-```
+2.  **Run Django Migrations:**
+    Apply any pending database migrations for the Django project.
+    ```bash
+    python manage.py migrate
+    ```
 
-### Install Python Dependencies
-Install all required Python packages from `requirements.txt`:
-```sh
-pip install -r requirements.txt
-```
+3.  **Start Celery Worker:**
+    The Celery worker executes the tasks. Open a new terminal and run:
+    ```bash
+    celery -A alx_backend_graphql_crm worker -l info
+    ```
+    *   `-A alx_backend_graphql_crm`: Specifies the Celery application instance.
+    *   `worker`: Starts the worker process.
+    *   `-l info`: Sets the logging level to info, providing detailed output.
 
-## 2. Database Migrations
-The `django-celery-beat` library adds its own database models to store task schedules. You need to run migrations to create the necessary tables.
+4.  **Start Celery Beat Scheduler:**
+    Celery Beat is the scheduler that triggers periodic tasks (like the CRM report generation). Open another new terminal and run:
+    ```bash
+    celery -A alx_backend_graphql_crm beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    ```
+    *   `beat`: Starts the beat scheduler process.
+    *   `--scheduler django_celery_beat.schedulers:DatabaseScheduler`: Specifies Django's database scheduler, which allows managing schedules via the Django admin.
 
-```sh
-python manage.py migrate
-```
+## Verification
 
-## 3. Running Background Services
-To run the automated tasks, you need to start two separate services: a Celery worker and the Celery Beat scheduler. It's recommended to run each command in a separate terminal window.
+After starting the Celery worker and beat, the `generate_crm_report` task is scheduled to run weekly (every Monday at 06:00 UTC by default, as configured in `settings.py`).
 
-### Start the Celery Worker
-The worker is the process that executes the tasks. It listens for jobs from the Redis message queue.
+To verify that the report is being generated:
 
-```sh
-# The project name 'alx_backend_graphql' should be used with the -A flag.
-celery -A alx_backend_graphql worker -l info
-```
-You should see the worker connect and list the discovered tasks, including `crm.tasks.generate_crm_report`.
+1.  **Check the log file:**
+    The CRM reports will be appended to the `/tmp/crm_report_log.txt` file.
+    ```bash
+    cat /tmp/crm_report_log.txt
+    ```
+    You should see entries similar to:
+    `YYYY-MM-DD HH:MM:SS - Report: X customers, Y orders, Z revenue`
 
-### Start the Celery Beat Scheduler
-Celery Beat is the scheduler. It's responsible for sending tasks to the queue at their scheduled time (e.g., the weekly report).
-
-```sh
-# The project name 'alx_backend_graphql' should be used with the -A flag.
-celery -A alx_backend_graphql beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
-```
-This will start the scheduler, which will periodically check for tasks that need to be run.
-
-## 4. Verifying Task Execution
-The Celery tasks and cron jobs are configured to write to log files in the `/tmp/` directory.
-
-- **Weekly CRM Report (Celery):**
-  Check the contents of this file after the scheduled time (Monday at 6:00 AM UTC).
-  ```sh
-  tail -f /tmp/crm_report_log.txt
-  ```
-  *Expected output:* `YYYY-MM-DD HH:MM:SS - Report: X customers, Y orders, Z.ZZ revenue`
-
-- **Heartbeat Log (`django-crontab`):**
-  This log should be updated every 5 minutes.
-  ```sh
-  tail -f /tmp/crm_heartbeat_log.txt
-  ```
-
-- **Low Stock Updates (`django-crontab`):**
-  This log is updated every 12 hours.
-  ```sh
-  tail -f /tmp/low_stock_updates_log.txt
-  ```
-- **Order Reminders (`cron`):**
-  This log is updated daily at 8:00 AM.
-  ```sh
-  tail -f /tmp/order_reminders_log.txt
-  ```
-- **Customer Cleanup (`cron`):**
-  This log is updated every Sunday at 2:00 AM.
-  ```sh
-  tail -f /tmp/customer_cleanup_log.txt
-  ```
-
-## 5. Running django-crontab jobs
-To install the cronjobs defined in settings.py into user's crontab run the following command
-```sh
-python manage.py crontab add
-```
-To view active cronjobs
-```sh
-python manage.py crontab show
-```
-To remove cronjobs
-```sh
-python manage.py crontab remove
-```
+2.  **Manually Triggering a Task (for testing purposes):**
+    You can manually trigger the `generate_crm_report` task from a Django shell to test its functionality immediately without waiting for the scheduled time:
+    ```bash
+    python manage.py shell
+    ```
+    ```python
+    from crm.tasks import generate_crm_report
+    generate_crm_report.delay()
+    ```
+    Then, check `/tmp/crm_report_log.txt` again.
