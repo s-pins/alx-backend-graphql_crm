@@ -1,4 +1,5 @@
-import datetime
+import requests
+from datetime import datetime
 from celery import shared_task
 from django.db.models import Sum, Count
 from crm.models import Customer, Order
